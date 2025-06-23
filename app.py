@@ -1,18 +1,18 @@
 # MusicApp - Core Application File
-# Focus: Basic Voice Recording for Solfege Notes
+# Focus: Basic Voice Recording and Playback for Solfege Notes
 
 import pyaudio
 import wave
 import time # To help name unique recording files
+import os   # To manage directory creation and file paths
 
-# --- Configuration for Audio Recording ---
-# These values are standard for good quality audio
+# --- Configuration for Audio Recording/Playback ---
 FORMAT = pyaudio.paInt16    # Audio format (16-bit integers)
 CHANNELS = 1                # Number of audio channels (1 for mono, 2 for stereo)
 RATE = 44100                # Sample rate (samples per second, 44.1kHz is standard CD quality)
 CHUNK = 1024                # Number of audio frames per buffer
-RECORD_SECONDS = 3          # Duration of each recording in seconds (can be adjusted)
-OUTPUT_DIR = "recordings/"  # Directory to save recordings (will be created if not exists)
+RECORD_SECONDS = 1.5          # Duration of each recording in seconds (can be adjusted)
+OUTPUT_DIR = "recordings/"  # Directory to save recordings
 
 # The 7-note solfège system
 SOLFEGE_NOTES = ["Do", "Re", "Mi", "Fa", "Sol", "La", "Ti"]
@@ -29,15 +29,6 @@ def record_note(note_name, duration=RECORD_SECONDS):
     Records audio for a specified duration and saves it to a WAV file.
     """
     audio = pyaudio.PyAudio()
-
-    # Find default input device
-    # You might need to specify a device index if you have multiple microphones
-    # info = audio.get_host_api_info_by_index(0)
-    # numdevices = info.get('deviceCount')
-    # for i in range(0, numdevices):
-    #     if (audio.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-    #         print("Input Device id ", i, " - ", audio.get_device_info_by_host_api_device_index(0, i).get('name'))
-    # Use index based on output from above, or just rely on default
 
     stream = audio.open(format=FORMAT,
                         channels=CHANNELS,
@@ -59,14 +50,12 @@ def record_note(note_name, duration=RECORD_SECONDS):
     audio.terminate()
 
     # Ensure the output directory exists
-    import os
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
 
     # Save the recorded audio to a WAV file
-    # We use a timestamp to ensure unique filenames if you record multiple times
     timestamp = int(time.time())
-    file_name = f"{OUTPUT_DIR}{note_name.lower()}_{timestamp}.wav"
+    file_name = os.path.join(OUTPUT_DIR, f"{note_name.lower()}_{timestamp}.wav") # Use os.path.join for better path handling
 
     wf = wave.open(file_name, 'wb')
     wf.setnchannels(CHANNELS)
@@ -77,6 +66,37 @@ def record_note(note_name, duration=RECORD_SECONDS):
 
     print(f"Recording saved to: {file_name}")
     return file_name # Return the path to the saved file
+
+def play_note_file(file_path):
+    """
+    Plays a WAV audio file.
+    """
+    if not os.path.exists(file_path):
+        print(f"Error: File not found for playback: {file_path}")
+        return
+
+    print(f"[PLAYBACK] Playing: {file_path}...")
+    wf = wave.open(file_path, 'rb') # Open in read-binary mode
+
+    audio = pyaudio.PyAudio()
+
+    stream = audio.open(format=audio.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True) # Important: output=True for playback!
+
+    # Read data in chunks and play it
+    data = wf.readframes(CHUNK)
+    while data:
+        stream.write(data)
+        data = wf.readframes(CHUNK)
+
+    print("[PLAYBACK] Playback finished.")
+
+    stream.stop_stream()
+    stream.close()
+    audio.terminate()
+    wf.close()
 
 
 # Main part of the application
@@ -98,5 +118,17 @@ if __name__ == "__main__":
     for f in recorded_files:
         print(f"- {f}")
 
+    # --- New Playback Section ---
+    print("\n--- Playback Module ---")
+    play_choice = input("Would you like to play back your recorded notes now? (yes/no): ").lower().strip()
+
+    if play_choice == "yes":
+        print("\nPlaying back your recorded notes:")
+        for note_file in recorded_files:
+            play_note_file(note_file)
+            time.sleep(0.2) # Small pause between notes for clarity
+    else:
+        print("Okay, skipping playback for now.")
+
     print("\nThanks for using MusicApp! Now you have your recorded solfège notes.")
-    print("Next, we can explore playing them back.")
+    print("Next, we can explore advanced features like analyzing the notes!")
